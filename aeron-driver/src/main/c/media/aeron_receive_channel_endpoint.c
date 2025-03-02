@@ -294,6 +294,7 @@ int aeron_receive_channel_endpoint_send_sm(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(endpoint->short_sends_counter, 1);
+            AERON_APPEND_ERR("%s", "aeron_receive_channel_endpoint_send_sm");
         }
     }
 
@@ -333,6 +334,7 @@ int aeron_receive_channel_endpoint_send_nak(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(endpoint->short_sends_counter, 1);
+            AERON_APPEND_ERR("%s", "aeron_receive_channel_endpoint_send_nak");
         }
     }
 
@@ -386,6 +388,7 @@ int aeron_receive_channel_endpoint_send_rttm(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(endpoint->short_sends_counter, 1);
+            AERON_APPEND_ERR("%s", "short send in aeron_receive_channel_endpoint_send_rttm");
         }
     }
 
@@ -420,6 +423,7 @@ int aeron_receive_channel_endpoint_send_response_setup(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(endpoint->short_sends_counter, 1);
+            AERON_APPEND_ERR("%s", "aeron_receive_channel_endpoint_send_response_setup");
         }
     }
 

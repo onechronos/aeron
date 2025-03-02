@@ -473,6 +473,7 @@ int aeron_network_publication_setup_message_check(
             if (bytes_sent < (int64_t)iov.iov_len)
             {
                 aeron_counter_increment(publication->short_sends_counter, 1);
+                AERON_APPEND_ERR("%s", "aeron_network_publication_setup_message_check");
             }
         }
 
@@ -529,6 +530,7 @@ int aeron_network_publication_heartbeat_message_check(
             if (bytes_sent < (int64_t)iov.iov_len)
             {
                 aeron_counter_increment(publication->short_sends_counter, 1);
+                AERON_APPEND_ERR("%s", "aeron_network_publication_heartbeat_message_check");
             }
         }
 
@@ -603,6 +605,7 @@ int aeron_network_publication_send_data(
         {
             publication->current_messages_per_send = 1;
             aeron_counter_increment(publication->short_sends_counter, 1);
+            AERON_APPEND_ERR("%s", "short send in aeron_network_publication_send_data");
         }
     }
     else if (publication->track_sender_limits && available_window <= 0)
@@ -723,6 +726,7 @@ int aeron_network_publication_resend(void *clientd, int32_t term_id, int32_t ter
                 if (msg_bytes_sent < (int64_t)iov.iov_len)
                 {
                     aeron_counter_increment(publication->short_sends_counter, 1);
+                    AERON_APPEND_ERR("%s", "aeron_network_publication_resend");
                     break;
                 }
             }
@@ -924,6 +928,7 @@ void aeron_network_publication_on_rttm(
             if (bytes_sent < (int64_t)iov.iov_len)
             {
                 aeron_counter_increment(publication->short_sends_counter, 1);
+                AERON_APPEND_ERR("%s", "short send in aeron_network_publication_on_rttm");
             }
         }
     }
