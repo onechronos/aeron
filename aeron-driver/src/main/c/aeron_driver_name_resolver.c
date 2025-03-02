@@ -763,7 +763,7 @@ static int aeron_driver_name_resolver_do_send(
         if (bytes_sent < (int64_t)iov.iov_len)
         {
             aeron_counter_increment(resolver->short_sends_counter, 1);
-            AERON_APPEND_ERR("%s", "short send in aeron_driver_name_resolver_do_send");
+            printf("%s", "short send in aeron_driver_name_resolver_do_send");
         }
     }
     else
