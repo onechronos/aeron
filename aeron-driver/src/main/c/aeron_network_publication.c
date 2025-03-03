@@ -19,6 +19,7 @@
 #define _GNU_SOURCE
 #endif
 
+#include <inttypes.h>
 #include <errno.h>
 #include <string.h>
 #include <inttypes.h>
@@ -414,6 +415,7 @@ static int aeron_network_publication_do_send(
         }
         else
         {
+            printf("AF_UNSPEC hit in aeron_network_publication_do_send\n");
             return 0;
         }
     }
@@ -473,7 +475,9 @@ int aeron_network_publication_setup_message_check(
             if (bytes_sent < (int64_t)iov.iov_len)
             {
                 aeron_counter_increment(publication->short_sends_counter, 1);
-                printf("%s", "short send in aeron_network_publication_setup_message_check");
+                printf("short send in aeron_network_publication_setup_message_check: (%" PRId64 ", %" PRId64 ")\n",
+                       bytes_sent,
+                       (int64_t)iov.iov_len);
             }
         }
 
@@ -530,7 +534,9 @@ int aeron_network_publication_heartbeat_message_check(
             if (bytes_sent < (int64_t)iov.iov_len)
             {
                 aeron_counter_increment(publication->short_sends_counter, 1);
-                printf("%s", "short send in aeron_network_publication_heartbeat_message_check");
+                printf("short send in aeron_network_publication_heartbeat_message_check: (%" PRId64 ", %" PRId64 ")\n",
+                       bytes_sent,
+                       (int64_t)iov.iov_len);
             }
         }
 
@@ -605,7 +611,7 @@ int aeron_network_publication_send_data(
         {
             publication->current_messages_per_send = 1;
             aeron_counter_increment(publication->short_sends_counter, 1);
-            printf("%s", "short send in aeron_network_publication_send_data");
+            printf("%s", "short send in aeron_network_publication_send_data\n");
         }
     }
     else if (publication->track_sender_limits && available_window <= 0)
@@ -726,7 +732,7 @@ int aeron_network_publication_resend(void *clientd, int32_t term_id, int32_t ter
                 if (msg_bytes_sent < (int64_t)iov.iov_len)
                 {
                     aeron_counter_increment(publication->short_sends_counter, 1);
-                    printf("%s", "short send in aeron_network_publication_resend");
+                    printf("%s", "short send in aeron_network_publication_resend\n");
                     break;
                 }
             }
@@ -928,7 +934,7 @@ void aeron_network_publication_on_rttm(
             if (bytes_sent < (int64_t)iov.iov_len)
             {
                 aeron_counter_increment(publication->short_sends_counter, 1);
-                printf("%s", "short send in aeron_network_publication_on_rttm");
+                printf("%s", "short send in aeron_network_publication_on_rttm\n");
             }
         }
     }

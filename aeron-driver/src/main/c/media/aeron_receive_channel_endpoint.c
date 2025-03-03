@@ -294,7 +294,7 @@ int aeron_receive_channel_endpoint_send_sm(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(endpoint->short_sends_counter, 1);
-            printf("%s", "short send in aeron_receive_channel_endpoint_send_sm");
+            printf("%s", "short send in aeron_receive_channel_endpoint_send_sm\n");
         }
     }
 
@@ -334,7 +334,7 @@ int aeron_receive_channel_endpoint_send_nak(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(endpoint->short_sends_counter, 1);
-            printf("%s", "short send in aeron_receive_channel_endpoint_send_nak");
+            printf("%s", "short send in aeron_receive_channel_endpoint_send_nak\n");
         }
     }
 
@@ -388,7 +388,7 @@ int aeron_receive_channel_endpoint_send_rttm(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(endpoint->short_sends_counter, 1);
-            printf("%s", "short send in aeron_receive_channel_endpoint_send_rttm");
+            printf("%s", "short send in aeron_receive_channel_endpoint_send_rttm\n");
         }
     }
 
@@ -423,7 +423,7 @@ int aeron_receive_channel_endpoint_send_response_setup(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(endpoint->short_sends_counter, 1);
-            printf("%s", "short send in aeron_receive_channel_endpoint_send_response_setup");
+            printf("%s", "short send in aeron_receive_channel_endpoint_send_response_setup\n");
         }
     }
 
@@ -465,7 +465,7 @@ int aeron_receiver_channel_endpoint_send_error_frame(
         if (bytes_sent >= 0)
         {
             aeron_counter_increment(channel_endpoint->short_sends_counter, 1);
-            printf("%s", "short send in aeron_receiver_channel_endpoint_send_error_frame");
+            printf("%s", "short send in aeron_receiver_channel_endpoint_send_error_frame\n");
         }
     }
     else
