@@ -38,6 +38,61 @@ jobs:
         java: [ '17', '21', '25' ]
         os: ['ubuntu-24.04', 'windows-latest', 'macos-15']
     steps:
+      - name: Use faster temporary storage (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $fast_dir = "D:\fast-dir"
+          New-Item -ItemType Directory -Path "$fast_dir"
+          New-Item -ItemType Directory -Path "$fast_dir\temp"
+          New-Item -ItemType Directory -Path "$fast_dir\.m2"
+          New-Item -ItemType Directory -Path "$fast_dir\.gradle"
+
+          if (Test-Path "$env:userprofile\.m2")
+          {
+            Remove-Item "$env:userprofile\.m2" -Recurse
+          }
+          New-Item -ItemType SymbolicLink -Path "$env:userprofile\.m2" -Target "$fast_dir\.m2"
+
+          echo "TMP=$fast_dir\temp" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "TEMP=$fast_dir\temp" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "M2_HOME=$fast_dir\.m2" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "GRADLE_USER_HOME=$fast_dir\.gradle" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Setup small temp file system (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo mkdir -p /mnt/tmp_aeron_dir
+          sudo mount -t tmpfs -o size=50M,mode=777 tmpfs /mnt/tmp_aeron_dir
+      - name: Setup small temp file system and localhost name (MacOS)
+        if: runner.os == 'macOS'
+        run: |
+          sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
+          dscacheutil -flushcache
+          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 60)))
+      - name: Setup small temp file system (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $current_size = (Get-PartitionSupportedSize -DiskNumber 1 -PartitionNumber 1)
+          $new_size = ($current_size.SizeMax - 100 * 1024 * 1024)
+          Resize-Partition -DiskNumber 1 -PartitionNumber 1 -Size ($new_size)
+          New-Partition -DiskNumber 1 -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
+          New-Item -ItemType Directory -Path T:\tmp_aeron_dir
+      - name: Enable core dumps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          ulimit -c unlimited
+          sudo systemctl stop apport.service || true
+          sudo systemctl disable apport.service || true
+          sudo mkdir -p /var/coredump
+          sudo chmod a+rw /var/coredump
+          sudo sysctl -w kernel.core_pattern="/var/coredump/core_%e.%p"
+      - name: Enable core dumps (MacOS)
+        if: runner.os == 'macOS'
+        run: |
+          ulimit -c unlimited
+          sudo mkdir -p /var/coredump
+          sudo chmod a+rw /var/coredump
+          sudo sysctl -w kern.coredump=1
+          sudo sysctl -w kern.corefile="/var/coredump/core.%P"
       - name: Checkout code
         uses: actions/checkout@v5
         with:
@@ -65,43 +120,7 @@ jobs:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-      - name: Setup small temp file system (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo mkdir -p /mnt/tmp_aeron_dir
-          sudo mount -t tmpfs -o size=50M,mode=777 tmpfs /mnt/tmp_aeron_dir
-      - name: Setup small temp file system and localhost name (MacOS)
-        if: runner.os == 'macOS'
-        run: |
-          sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
-          dscacheutil -flushcache
-          sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 60)))
-      - name: Setup small temp file system (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          $current_size = (Get-PartitionSupportedSize -DiskNumber 1 -PartitionNumber 1)
-          $new_size = ($current_size.SizeMax - 100 * 1024 * 1024)
-          Resize-Partition -DiskNumber 1 -PartitionNumber 1 -Size ($new_size)
-          New-Partition -DiskNumber 1 -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
-          mkdir T:/tmp_aeron_dir
-      - name: Enable core dumps (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          ulimit -c unlimited
-          sudo systemctl stop apport.service || true
-          sudo systemctl disable apport.service || true
-          sudo mkdir -p /var/coredump
-          sudo chmod a+rw /var/coredump
-          sudo sysctl -w kernel.core_pattern="/var/coredump/core_%e.%p"
-      - name: Enable core dumps (MacOS)
-        if: runner.os == 'macOS'
-        run: |
-          ulimit -c unlimited
-          sudo mkdir -p /var/coredump
-          sudo chmod a+rw /var/coredump
-          sudo sysctl -w kern.coredump=1
-          sudo sysctl -w kern.corefile="/var/coredump/core.%P"
+        uses: gradle/actions/setup-gradle@v5
       - name: Build with Gradle
         run: ./gradlew -x javadoc --console=plain
       - name: Remove small temp file system (Linux)
@@ -114,7 +133,11 @@ jobs:
         run: sudo diskutil eject tmp_aeron_dir
       - name: Remove small temp file system (Windows)
         if: always() && runner.os == 'Windows'
-        run: Remove-Partition -DriveLetter T -Confirm:$false
+        run: |
+          if (Test-Path "T:\tmp_aeron_dir")
+          {
+            Remove-Partition -DriveLetter T -Confirm:$false
+          }
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -123,7 +146,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: crash-logs-${{ matrix.os }}-java-${{ matrix.java }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -148,7 +171,7 @@ jobs:
           distribution: 'zulu'
           java-version: ${{ matrix.java }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
       - name: Setup BUILD_JAVA_HOME & BUILD_JAVA_VERSION
         run: |
           java -Xinternalversion
@@ -176,7 +199,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: crash-logs-topology-${{ matrix.os }}-java-${{ matrix.java }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -208,7 +231,7 @@ jobs:
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -234,7 +257,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: crash-logs-gcc-2404-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -253,7 +276,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
       - name: Build
         run: GCC_VERSION=${{ matrix.version }} cppbuild/rocky-docker-build
       - name: Copy test logs
@@ -264,7 +287,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: crash-logs-gcc-rhel-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -296,7 +319,7 @@ jobs:
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -324,7 +347,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: crash-logs-clang-2404-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -356,7 +379,7 @@ jobs:
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
       - name: Install compiler
         run: |
           echo 'Acquire::Retries "${INSTALL_COMPILER_RETRIES}";' | sudo tee -a /etc/apt/apt.conf.d/99retries
@@ -375,7 +398,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: crash-logs-clang-debug-${{ matrix.version }}
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -403,7 +426,7 @@ jobs:
           echo "BUILD_JAVA_HOME=${JAVA_HOME}" >> $GITHUB_ENV
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" >> $GITHUB_ENV
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
       - name: Setup small temp file system and localhost name
         run: |
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
@@ -421,7 +444,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: crash-logs-xcode-latest
           path: ${{ steps.copy_test_logs.outputs.file }}
@@ -434,6 +457,31 @@ jobs:
       CC: cl
       CXX: cl
     steps:
+      - name: Use faster temporary storage
+        run: |
+          $fast_dir = "D:\fast-dir"
+          New-Item -ItemType Directory -Path "$fast_dir"
+          New-Item -ItemType Directory -Path "$fast_dir\temp"
+          New-Item -ItemType Directory -Path "$fast_dir\.m2"
+          New-Item -ItemType Directory -Path "$fast_dir\.gradle"
+
+          if (Test-Path "$env:userprofile\.m2")
+          {
+            Remove-Item "$env:userprofile\.m2" -Recurse
+          }
+          New-Item -ItemType SymbolicLink -Path "$env:userprofile\.m2" -Target "$fast_dir\.m2"
+
+          echo "TMP=$fast_dir\temp" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "TEMP=$fast_dir\temp" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "M2_HOME=$fast_dir\.m2" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "GRADLE_USER_HOME=$fast_dir\.gradle" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Setup small temp file system
+        run: |
+          $current_size = (Get-PartitionSupportedSize -DiskNumber 1 -PartitionNumber 1)
+          $new_size = ($current_size.SizeMax - 100 * 1024 * 1024)
+          Resize-Partition -DiskNumber 1 -PartitionNumber 1 -Size ($new_size)
+          New-Partition -DiskNumber 1 -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
+          New-Item -ItemType Directory -Path T:\tmp_aeron_dir
       - name: Checkout code
         uses: actions/checkout@v5
         with:
@@ -449,18 +497,16 @@ jobs:
           echo "BUILD_JAVA_HOME=$env:JAVA_HOME" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
           echo "BUILD_JAVA_VERSION=${{ env.JAVA_VERSION }}" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
-      - name: Setup small temp file system
-        run: |
-          $current_size = (Get-PartitionSupportedSize -DiskNumber 1 -PartitionNumber 1)
-          $new_size = ($current_size.SizeMax - 100 * 1024 * 1024)
-          Resize-Partition -DiskNumber 1 -PartitionNumber 1 -Size ($new_size)
-          New-Partition -DiskNumber 1 -Size 60MB -DriveLetter T | Format-Volume -FileSystem NTFS -Confirm:$false
-          mkdir T:/tmp_aeron_dir
+        uses: gradle/actions/setup-gradle@v5
       - name: Build
         run: cppbuild/cppbuild.ps1 --cxx-hide-deprecation-message
-      - name: Remove small temp file system
-        run: Remove-Partition -DriveLetter T -Confirm:$false
+      - name: Remove small temp file system (Windows)
+        if: always()
+        run: |
+          if (Test-Path "T:\tmp_aeron_dir")
+          {
+            Remove-Partition -DriveLetter T -Confirm:$false
+          }
       - name: Copy test logs
         id: copy_test_logs
         if: failure()
@@ -469,7 +515,7 @@ jobs:
           ./gradlew tarTestLogs
       - name: Upload crash logs
         if: always() && steps.copy_test_logs.outputs.file == 'build/distributions/test_logs.tbz2'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: crash-logs-msvc-latest
           path: ${{ steps.copy_test_logs.outputs.file }}
