@@ -40,6 +40,11 @@ jobs:
         java: [ '17', '21', '25' ]
         os: ['ubuntu-24.04', 'windows-latest', 'macos-15']
     steps:
+      - name: Use faster temporary storage (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "TMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "TEMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Checkout code
         uses: actions/checkout@v5
         with:
@@ -251,6 +256,10 @@ jobs:
       CC: cl
       CXX: cl
     steps:
+      - name: Use faster temporary storage (Windows)
+        run: |
+          echo "TMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          echo "TEMP=$env:RUNNER_TEMP" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
       - name: Checkout code
         uses: actions/checkout@v5
         with:
