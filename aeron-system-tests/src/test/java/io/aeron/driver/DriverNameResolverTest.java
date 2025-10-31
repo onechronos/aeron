@@ -51,7 +51,6 @@ import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
 import static org.agrona.concurrent.status.CountersReader.TYPE_ID_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
