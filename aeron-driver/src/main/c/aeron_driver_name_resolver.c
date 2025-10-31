@@ -74,7 +74,6 @@ typedef struct aeron_driver_name_resolver_stct
     size_t bootstrap_neighbors_length;
     char **bootstrap_neighbors;
     struct sockaddr_storage bootstrap_neighbor_addr;
-    unsigned int interface_index;
     aeron_udp_channel_transport_bindings_t *transport_bindings;
     aeron_name_resolver_t bootstrap_resolver;
     aeron_udp_channel_data_paths_t data_paths;
@@ -191,15 +190,17 @@ int aeron_driver_name_resolver_init(
     _driver_resolver->name = name;
     _driver_resolver->name_length = strlen(name);
 
-    if (aeron_find_unicast_interface(
-        AF_INET, interface_name, &_driver_resolver->local_socket_addr, &_driver_resolver->interface_index) < 0)
+    size_t prefixlen = 0;
+    if (aeron_interface_parse_and_resolve(interface_name, &_driver_resolver->local_socket_addr, &prefixlen) < 0)
     {
+        AERON_APPEND_ERR("failed to parse interface: %s", interface_name);
         goto error_cleanup;
     }
 
     if (aeron_driver_name_resolver_from_sockaddr(
         &_driver_resolver->local_socket_addr, &_driver_resolver->local_cache_addr) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         goto error_cleanup;
     }
 
@@ -209,6 +210,7 @@ int aeron_driver_name_resolver_init(
         aeron_default_name_resolver_supplier;
     if (bootstrap_resolver_supplier_func(&_driver_resolver->bootstrap_resolver, NULL, context) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         goto error_cleanup;
     }
 
@@ -222,7 +224,7 @@ int aeron_driver_name_resolver_init(
         _driver_resolver->saved_bootstrap_neighbor = strdup(bootstrap_neighbor);
         if (NULL == _driver_resolver->saved_bootstrap_neighbor)
         {
-            AERON_SET_ERR(EINVAL, "Failed to duplicate bootstrap neighbors string: %s", bootstrap_neighbor);
+            AERON_SET_ERR(EINVAL, "failed to duplicate bootstrap neighbors string: %s", bootstrap_neighbor);
             goto error_cleanup;
         }
         char *bootstrap_neighbors[AERON_NAME_RESOLVER_DRIVER_MAX_BOOTSTRAP_NEIGHBORS];
@@ -235,7 +237,7 @@ int aeron_driver_name_resolver_init(
 
         if (num_neighbors < 0)
         {
-            AERON_SET_ERR(EINVAL, "Failed to parse bootstrap neighbors list: %s", bootstrap_neighbor);
+            AERON_SET_ERR(EINVAL, "failed to parse bootstrap neighbors list: %s", bootstrap_neighbor);
             goto error_cleanup;
         }
 
@@ -243,7 +245,7 @@ int aeron_driver_name_resolver_init(
             (void **)&_driver_resolver->bootstrap_neighbors,
             (strlen(bootstrap_neighbor) + num_neighbors) * sizeof(char)) < 0)
         {
-            AERON_APPEND_ERR("%s", "Allocating bootstrap neighbors array");
+            AERON_APPEND_ERR("%s", "failed to allocate bootstrap neighbors array");
             goto error_cleanup;
         }
 
@@ -255,6 +257,7 @@ int aeron_driver_name_resolver_init(
 
         if (aeron_driver_name_resolver_resolve_bootstrap_neighbor(_driver_resolver) < 0)
         {
+            AERON_APPEND_ERR("failed to bootstrap neighbor from: %s", bootstrap_neighbor);
             goto error_cleanup;
         }
     }
@@ -269,15 +272,15 @@ int aeron_driver_name_resolver_init(
         context,
         AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_CONDUCTOR) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         goto error_cleanup;
     }
-
 
     aeron_udp_channel_transport_params_t transport_params = {
         context->socket_rcvbuf,
         context->socket_sndbuf,
         context->mtu_length,
-        _driver_resolver->interface_index,
+        0,
         0,
         false,
     };
@@ -304,12 +307,14 @@ int aeron_driver_name_resolver_init(
     if (_driver_resolver->transport_bindings->poller_init_func(
         &_driver_resolver->poller, context, AERON_UDP_CHANNEL_TRANSPORT_AFFINITY_CONDUCTOR) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         goto error_cleanup;
     }
 
     if (_driver_resolver->transport_bindings->poller_add_func(
         &_driver_resolver->poller, &_driver_resolver->transport) < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         goto error_cleanup;
     }
 
@@ -333,6 +338,7 @@ int aeron_driver_name_resolver_init(
         neighbor_counter_label, strlen(neighbor_counter_label));
     if (_driver_resolver->neighbor_counter.counter_id < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         goto error_cleanup;
     }
 
@@ -348,6 +354,7 @@ int aeron_driver_name_resolver_init(
         cache_entries_label, strlen(cache_entries_label));
     if (_driver_resolver->cache_size_counter.counter_id < 0)
     {
+        AERON_APPEND_ERR("%s", "");
         goto error_cleanup;
     }
     _driver_resolver->counters_manager = context->counters_manager;
