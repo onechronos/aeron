@@ -15,9 +15,17 @@
  */
 package io.aeron.driver;
 
-import io.aeron.*;
+import io.aeron.Aeron;
+import io.aeron.AeronCounters;
+import io.aeron.CommonContext;
+import io.aeron.Publication;
+import io.aeron.Subscription;
 import io.aeron.logbuffer.LogBufferDescriptor;
-import io.aeron.test.*;
+import io.aeron.test.InterruptAfter;
+import io.aeron.test.InterruptingTestCallback;
+import io.aeron.test.SlowTest;
+import io.aeron.test.SystemTestWatcher;
+import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.collections.MutableBoolean;
@@ -36,7 +44,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static io.aeron.Aeron.NULL_VALUE;
-import static org.agrona.concurrent.status.CountersReader.*;
+import static io.aeron.driver.DriverNameResolver.NEIGHBOR_RESOLUTION_INTERVAL_MS;
+import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
+import static org.agrona.concurrent.status.CountersReader.RECORD_ALLOCATED;
+import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
+import static org.agrona.concurrent.status.CountersReader.TYPE_ID_OFFSET;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -414,17 +427,28 @@ class DriverNameResolverTest
         final int aNeighborsCounterId = awaitNeighborsCounterId("A");
         final int bNeighborsCounterId = awaitNeighborsCounterId("AA");
 
+        final long deadlineNs = System.nanoTime() + 2 * TimeUnit.MILLISECONDS.toNanos(NEIGHBOR_RESOLUTION_INTERVAL_MS);
+
         awaitCounterValue("A", aNeighborsCounterId, 1);
         awaitCounterValue("AA", bNeighborsCounterId, 1);
+
+        // Ensure that self entry is not added to the cache if received without SELF flag
+        final CountersReader aCounters = clients.get("A").countersReader();
+        final CountersReader bCounters = clients.get("AA").countersReader();
+        do
+        {
+            assertEquals(1, aCounters.getCounterValue(aNeighborsCounterId));
+            assertEquals(1, bCounters.getCounterValue(bNeighborsCounterId));
+        }
+        while (System.nanoTime() < deadlineNs);
     }
 
     private void closeDriver(final String index)
     {
-        clients.get(index).close();
-        clients.remove(index);
-        drivers.get(index).close();
-        drivers.get(index).context().deleteDirectory();
-        drivers.remove(index);
+        clients.remove(index).close();
+        final TestMediaDriver driver = drivers.remove(index);
+        driver.close();
+        driver.context().deleteDirectory();
     }
 
     private static MediaDriver.Context setDefaults(final MediaDriver.Context context)
@@ -433,9 +457,6 @@ class DriverNameResolverTest
             .errorHandler(Tests::onError)
             .publicationTermBufferLength(LogBufferDescriptor.TERM_MIN_LENGTH)
             .threadingMode(ThreadingMode.SHARED)
-            .driverTimeoutMs(1000)
-            .clientLivenessTimeoutNs(TimeUnit.MILLISECONDS.toNanos(context.driverTimeoutMs()))
-            .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100))
             .dirDeleteOnStart(true);
 
         return context;

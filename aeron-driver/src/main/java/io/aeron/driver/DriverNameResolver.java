@@ -52,7 +52,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
 
     // TODO: make these configurable
     private static final long SELF_RESOLUTION_INTERVAL_MS = TimeUnit.SECONDS.toMillis(1);
-    private static final long NEIGHBOR_RESOLUTION_INTERVAL_MS = TimeUnit.SECONDS.toMillis(2);
+    static final long NEIGHBOR_RESOLUTION_INTERVAL_MS = TimeUnit.SECONDS.toMillis(2);
     private static final long TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long WORK_INTERVAL_MS = 10;
 
