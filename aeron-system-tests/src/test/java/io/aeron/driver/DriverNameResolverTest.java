@@ -445,10 +445,10 @@ class DriverNameResolverTest
         while (System.nanoTime() < deadlineNs);
     }
 
-    private void closeDriver(final String index)
+    private void closeDriver(final String name)
     {
-        clients.remove(index).close();
-        final TestMediaDriver driver = drivers.remove(index);
+        clients.remove(name).close();
+        final TestMediaDriver driver = drivers.remove(name);
         driver.close();
         driver.context().deleteDirectory();
     }
@@ -572,11 +572,13 @@ class DriverNameResolverTest
         {
             final String name = entry.getKey();
             final TestMediaDriver driver = entry.getValue();
-            assertNull(clients.get(name));
-            clients.put(name, Aeron.connect(new Aeron.Context()
-                .aeronDirectoryName(driver.aeronDirectoryName())
-                .driverTimeoutMs(driver.context().driverTimeoutMs())
-                .errorHandler(Tests::onError)));
+            if (!clients.containsKey(name))
+            {
+                clients.put(name, Aeron.connect(new Aeron.Context()
+                    .aeronDirectoryName(driver.aeronDirectoryName())
+                    .driverTimeoutMs(driver.context().driverTimeoutMs())
+                    .errorHandler(Tests::onError)));
+            }
         }
     }
 
