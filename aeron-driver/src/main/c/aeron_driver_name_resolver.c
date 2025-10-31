@@ -545,9 +545,9 @@ static int aeron_driver_name_resolver_on_resolution_entry(
     bool is_self,
     int64_t now_ms)
 {
-    // Ignore own records that match me...
+    // ignore self record
     if (cache_addr->port == aeron_driver_name_resolver_get_port(resolver) &&
-        name_length && resolver->name_length &&
+        name_length == resolver->name_length &&
         0 == strncmp(resolver->name, name, name_length))
     {
         return 0;
