@@ -32,6 +32,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 import static io.aeron.Aeron.NULL_VALUE;
@@ -394,6 +395,29 @@ class DriverNameResolverTest
         }
     }
 
+    @Test
+    @InterruptAfter(10)
+    void shouldMatchFullNameWhenPortsAreTheSameAndNamesCanBePrefixMatched()
+    {
+        addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
+            .aeronDirectoryName(baseDir + "-A")
+            .resolverName("A")
+            .resolverInterface("127.0.0.1:8050")
+            .resolverBootstrapNeighbor("127.0.0.2:8050"), testWatcher));
+
+        addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
+            .aeronDirectoryName(baseDir + "-B")
+            .resolverName("AA")
+            .resolverInterface("127.0.0.2:8050"), testWatcher));
+        startClients();
+
+        final int aNeighborsCounterId = awaitNeighborsCounterId("A");
+        final int bNeighborsCounterId = awaitNeighborsCounterId("AA");
+
+        awaitCounterValue("A", aNeighborsCounterId, 1);
+        awaitCounterValue("AA", bNeighborsCounterId, 1);
+    }
+
     private void closeDriver(final String index)
     {
         clients.get(index).close();
@@ -409,6 +433,9 @@ class DriverNameResolverTest
             .errorHandler(Tests::onError)
             .publicationTermBufferLength(LogBufferDescriptor.TERM_MIN_LENGTH)
             .threadingMode(ThreadingMode.SHARED)
+            .driverTimeoutMs(1000)
+            .clientLivenessTimeoutNs(TimeUnit.MILLISECONDS.toNanos(context.driverTimeoutMs()))
+            .timerIntervalNs(TimeUnit.MILLISECONDS.toNanos(100))
             .dirDeleteOnStart(true);
 
         return context;
@@ -525,6 +552,7 @@ class DriverNameResolverTest
                 {
                     clients.put(name, Aeron.connect(new Aeron.Context()
                         .aeronDirectoryName(driver.aeronDirectoryName())
+                        .driverTimeoutMs(driver.context().driverTimeoutMs())
                         .errorHandler(Tests::onError)));
                 }
             });
