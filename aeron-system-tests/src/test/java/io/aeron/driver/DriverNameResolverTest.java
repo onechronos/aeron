@@ -51,6 +51,7 @@ import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
 import static org.agrona.concurrent.status.CountersReader.TYPE_ID_OFFSET;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -313,11 +314,12 @@ class DriverNameResolverTest
             .resolverName("A")
             .resolverInterface("0.0.0.0:8050"), testWatcher));
 
-        addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
-            .aeronDirectoryName(baseDir + "-B")
-            .resolverName("B")
-            .resolverInterface("0.0.0.0:8051")
-            .resolverBootstrapNeighbor("just:wrong,non_existing_host:8050,localhost:8050,localhost:8051"),
+        addDriver(TestMediaDriver.launch(
+            setDefaults(new MediaDriver.Context())
+                .aeronDirectoryName(baseDir + "-B")
+                .resolverName("B")
+                .resolverInterface("0.0.0.0:8051")
+                .resolverBootstrapNeighbor("just:wrong,non_existing_host:8050,localhost:8050,localhost:8051"),
             testWatcher));
         startClients();
 
@@ -470,8 +472,8 @@ class DriverNameResolverTest
         while (true)
         {
             for (int offset = 0, counterId = 0, capacity = metaDataBuffer.capacity();
-                offset < capacity;
-                offset += METADATA_LENGTH, counterId++)
+                 offset < capacity;
+                 offset += METADATA_LENGTH, counterId++)
             {
                 final int recordStatus = metaDataBuffer.getIntVolatile(offset);
                 if (RECORD_ALLOCATED == recordStatus)
@@ -504,8 +506,8 @@ class DriverNameResolverTest
         while (true)
         {
             for (int offset = 0, counterId = 0, capacity = metaDataBuffer.capacity();
-                offset < capacity;
-                offset += METADATA_LENGTH, counterId++)
+                 offset < capacity;
+                 offset += METADATA_LENGTH, counterId++)
             {
                 final int recordStatus = metaDataBuffer.getIntVolatile(offset);
                 if (RECORD_ALLOCATED == recordStatus)
@@ -566,17 +568,16 @@ class DriverNameResolverTest
 
     private void startClients()
     {
-        drivers.forEach(
-            (name, driver) ->
-            {
-                if (!clients.containsKey(name))
-                {
-                    clients.put(name, Aeron.connect(new Aeron.Context()
-                        .aeronDirectoryName(driver.aeronDirectoryName())
-                        .driverTimeoutMs(driver.context().driverTimeoutMs())
-                        .errorHandler(Tests::onError)));
-                }
-            });
+        for (final Map.Entry<String, TestMediaDriver> entry : drivers.entrySet())
+        {
+            final String name = entry.getKey();
+            final TestMediaDriver driver = entry.getValue();
+            assertNull(clients.get(name));
+            clients.put(name, Aeron.connect(new Aeron.Context()
+                .aeronDirectoryName(driver.aeronDirectoryName())
+                .driverTimeoutMs(driver.context().driverTimeoutMs())
+                .errorHandler(Tests::onError)));
+        }
     }
 
     private void addDriver(final TestMediaDriver testMediaDriver)
