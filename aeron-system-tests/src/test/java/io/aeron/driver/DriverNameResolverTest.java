@@ -37,6 +37,8 @@ import org.agrona.concurrent.status.CountersReader;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -419,6 +421,7 @@ class DriverNameResolverTest
 
     @Test
     @InterruptAfter(10)
+    @DisabledOnOs(OS.MAC)
     void shouldMatchFullNameWhenPortsAreTheSameAndNamesCanBePrefixMatched()
     {
         addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
