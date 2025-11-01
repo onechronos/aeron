@@ -16,6 +16,7 @@
 package io.aeron.driver;
 
 import io.aeron.AeronCounters;
+import io.aeron.driver.media.NetworkUtil;
 import io.aeron.driver.media.UdpChannel;
 import io.aeron.driver.media.UdpNameResolutionTransport;
 import io.aeron.driver.status.SystemCounterDescriptor;
@@ -130,9 +131,11 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
 
         cache = new DriverNameResolverCache(TIMEOUT_MS);
 
-        final UdpChannel placeholderChannel =
-            UdpChannel.parse("aeron:udp?endpoint=localhost:8050", delegateResolver);
-        transport = new UdpNameResolutionTransport(placeholderChannel, localSocketAddress, unsafeBuffer, ctx);
+        final UdpChannel resolverChannel =
+            UdpChannel.parse("aeron:udp?endpoint=" +
+                NetworkUtil.formatAddressAndPort(localSocketAddress.getAddress(), localSocketAddress.getPort()),
+                delegateResolver);
+        transport = new UdpNameResolutionTransport(resolverChannel, localSocketAddress, unsafeBuffer, ctx);
 
         neighborsCounter = ctx.countersManager().newCounter(
             RESOLVER_NEIGHBORS_COUNTER_LABEL, AeronCounters.NAME_RESOLVER_NEIGHBORS_COUNTER_TYPE_ID);
@@ -271,13 +274,13 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
             localSocketAddress = boundAddress;
             localAddress = boundAddress.getAddress().getAddress();
 
-            neighborsCounter.appendToLabel(buildNeighborsCounterLabel(""));
+            neighborsCounter.updateLabel(buildNeighborsCounterLabel());
         }
     }
 
-    private String buildNeighborsCounterLabel(final String prefix)
+    private String buildNeighborsCounterLabel()
     {
-        final StringBuilder builder = new StringBuilder(prefix);
+        final StringBuilder builder = new StringBuilder(RESOLVER_NEIGHBORS_COUNTER_LABEL);
         builder.append(": bound ").append(transport.bindAddressAndPort());
 
         if (null != bootstrapNeighborAddress)
@@ -362,7 +365,7 @@ final class DriverNameResolver implements AutoCloseable, UdpNameResolutionTransp
 
                 if (!oldAddress.equals(bootstrapNeighborAddress))
                 {
-                    neighborsCounter.updateLabel(buildNeighborsCounterLabel(RESOLVER_NEIGHBORS_COUNTER_LABEL));
+                    neighborsCounter.updateLabel(buildNeighborsCounterLabel());
 
                     // avoid sending resolution frame if new bootstrap is in the neighbors list
                     for (final Neighbor neighbor : neighborList)

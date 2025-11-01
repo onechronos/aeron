@@ -20,6 +20,7 @@ import io.aeron.AeronCounters;
 import io.aeron.CommonContext;
 import io.aeron.Publication;
 import io.aeron.Subscription;
+import io.aeron.exceptions.AeronException;
 import io.aeron.logbuffer.LogBufferDescriptor;
 import io.aeron.test.InterruptAfter;
 import io.aeron.test.InterruptingTestCallback;
@@ -29,6 +30,7 @@ import io.aeron.test.Tests;
 import io.aeron.test.driver.TestMediaDriver;
 import org.agrona.CloseHelper;
 import org.agrona.collections.MutableBoolean;
+import org.agrona.collections.MutableReference;
 import org.agrona.concurrent.AtomicBuffer;
 import org.agrona.concurrent.SleepingMillisIdleStrategy;
 import org.agrona.concurrent.status.CountersReader;
@@ -38,6 +40,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
+import java.net.BindException;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
@@ -49,8 +52,13 @@ import static org.agrona.concurrent.status.CountersReader.METADATA_LENGTH;
 import static org.agrona.concurrent.status.CountersReader.RECORD_ALLOCATED;
 import static org.agrona.concurrent.status.CountersReader.RECORD_UNUSED;
 import static org.agrona.concurrent.status.CountersReader.TYPE_ID_OFFSET;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.endsWith;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -416,13 +424,13 @@ class DriverNameResolverTest
         addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
             .aeronDirectoryName(baseDir + "-A")
             .resolverName("A")
-            .resolverInterface("127.0.0.1:8050")
-            .resolverBootstrapNeighbor("127.0.0.2:8050"), testWatcher));
+            .resolverInterface("127.0.0.1:4809")
+            .resolverBootstrapNeighbor("127.0.0.2:4809"), testWatcher));
 
         addDriver(TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
             .aeronDirectoryName(baseDir + "-B")
             .resolverName("AA")
-            .resolverInterface("127.0.0.2:8050"), testWatcher));
+            .resolverInterface("127.0.0.2:4809"), testWatcher));
         startClients();
 
         final int aNeighborsCounterId = awaitNeighborsCounterId("A");
@@ -442,6 +450,34 @@ class DriverNameResolverTest
             assertEquals(1, bCounters.getCounterValue(bNeighborsCounterId));
         }
         while (System.nanoTime() < deadlineNs);
+    }
+
+    @Test
+    @InterruptAfter(10)
+    @SuppressWarnings("try")
+    void shouldUseActuallySpecifiedHostNamePortPairForCreatingChannelUri()
+    {
+        assumeTrue(TestMediaDriver.shouldRunJavaMediaDriver());
+
+        final String aeronDir = baseDir + "-error";
+        final MutableReference<Throwable> error = new MutableReference<>();
+        try (TestMediaDriver driver = TestMediaDriver.launch(setDefaults(new MediaDriver.Context())
+            .threadingMode(ThreadingMode.INVOKER)
+            .errorHandler(error::set)
+            .aeronDirectoryName(aeronDir)
+            .resolverName("test")
+            .resolverInterface("1.0.0.0:4809"), testWatcher))
+        {
+            final Throwable exception = error.get();
+            assertNull(exception.getCause());
+            final Throwable[] suppressed = exception.getSuppressed();
+            assertNotNull(suppressed);
+            assertEquals(1, suppressed.length);
+            final Throwable channelError = suppressed[0];
+            assertInstanceOf(AeronException.class, channelError);
+            assertThat(channelError.getMessage(), endsWith("aeron:udp?endpoint=1.0.0.0:4809"));
+            assertInstanceOf(BindException.class, channelError.getCause());
+        }
     }
 
     private void closeDriver(final String name)
