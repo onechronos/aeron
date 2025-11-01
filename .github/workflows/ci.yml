@@ -77,8 +77,6 @@ jobs:
           echo "Before"
           cat /etc/hosts
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
-          echo "127.0.0.2        localhost $(hostname)" | sudo tee -a /etc/hosts 
-          echo "127.0.0.3        localhost $(hostname)" | sudo tee -a /etc/hosts 
           echo "After"
           cat /etc/hosts
           dscacheutil -flushcache
