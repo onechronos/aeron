@@ -65,6 +65,8 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
+          echo "127.0.0.2        localhost $(hostname)" | sudo tee -a /etc/hosts 
+          echo "127.0.0.3        localhost $(hostname)" | sudo tee -a /etc/hosts 
           dscacheutil -flushcache
       - name: Setup java to run Gradle
         uses: actions/setup-java@v5
