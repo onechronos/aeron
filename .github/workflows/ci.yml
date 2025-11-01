@@ -74,7 +74,11 @@ jobs:
       - name: Setup small temp file system and localhost name (MacOS)
         if: runner.os == 'macOS'
         run: |
+          echo "Before"
+          cat /etc/hosts
           sudo sed -i bak "s/localhost/localhost $(hostname)/" /etc/hosts
+          echo "After"
+          cat /etc/hosts
           dscacheutil -flushcache
           sudo diskutil eraseDisk APFS tmp_aeron_dir $(hdiutil attach -nomount ram://$((2 * 1024 * 60)))
       - name: Setup small temp file system (Windows)
